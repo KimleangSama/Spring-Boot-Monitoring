@@ -1,0 +1,201 @@
+services:
+  postgres:
+    image: postgres:17.2
+    container_name: postgres
+    restart: on-failure
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: demo
+      TZ: Asia/Phnom_Penh
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -d demo -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    command: postgres -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all -c max_connections=200
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.17.1
+    container_name: postgres-exporter
+    ports:
+      - "9187:9187"
+    environment:
+      DATA_SOURCE_NAME: postgresql://postgres:postgres@postgres:5432/demo?sslmode=disable
+      TZ: Asia/Phnom_Penh
+    depends_on:
+      prometheus:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: elasticsearch
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - ./docker/elk/es.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
+      - ./data/elasticsearch:/usr/share/elasticsearch/data
+    environment:
+      node.name: elasticsearch
+      cluster.name: docker-cluster
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+      ELASTIC_PASSWORD: elastic
+      discovery.type: single-node
+      http.port: 9200
+      http.cors.allow-origin: http://localhost:1358, http://127.0.0.1:1358
+      http.cors.enabled: true
+      http.cors.allow-headers: X-Requested-With,X-Auth-Token,Content-Type,Content-Length,Authorization
+      http.cors.allow-credentials: true
+      xpack.security.enabled: false
+    healthcheck:
+      test: [ 'CMD', 'curl', '-f', 'http://localhost:9200' ]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.15.3
+    container_name: logstash
+    volumes:
+      - ./docker/elk/logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z
+      - ./docker/elk/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro,Z
+    ports:
+      - "5044:5044"
+      - "9600:9600"
+    environment:
+      LS_JAVA_OPTS: -Xms256m -Xmx256m
+      LOGSTASH_INTERNAL_PASSWORD: logstash
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    container_name: kibana
+    volumes:
+      - ./docker/elk/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      KIBANA_SYSTEM_PASSWORD: kibana
+    healthcheck:
+      test: [ 'CMD', 'curl', '-f', 'http://localhost:5601' ]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+  apm-server:
+    image: docker.elastic.co/apm/apm-server:8.15.3
+    container_name: apm-server
+    ports:
+      - "8200:8200"
+    environment:
+      - output.elasticsearch.hosts=['http://elasticsearch:9200']
+      - apm-server.host="0.0.0.0:8200"
+      - apm-server.secret_token="xxVpmQB2HMzCL9PgBHVrnxjNXXw5J7bd79DFm6sjBJR5HPXDhcF8MSb3vv4bpg44"
+      - setup.kibana.host="kibana:5601"
+      - setup.template.enabled=true
+      - logging.to_files=false
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      kibana:
+        condition: service_healthy
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    restart: always
+    entrypoint:
+      - sh
+      - -euc
+      - |
+        mkdir -p /data/loki-data && \
+        mkdir -p /data/loki-ruler && \
+        minio server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=loki
+      - MINIO_ROOT_PASSWORD=supersecret
+      - MINIO_PROMETHEUS_AUTH_TYPE=public
+      - MINIO_UPDATE=off
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./data/minio:/data
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    restart: on-failure
+    command: [ "-config.file=/etc/loki/config.yaml" ]
+    volumes:
+      - ./docker/mon/loki/config.yaml:/etc/loki/config.yaml
+    ports:
+      - "3100:3100"
+    depends_on:
+      - minio
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: on-failure
+    command:
+      - --enable-feature=exemplar-storage
+      - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./docker/mon/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./docker/mon/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
+    ports:
+      - "9090:9090"
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    restart: on-failure
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./docker/mon/tempo/tempo.yml:/etc/tempo.yaml
+      - ./data/tempo:/tmp/tempo
+    ports:
+      - "9411:9411" # zipkin
+      - "4317:4317" # OTLP gRPC
+  pyroscope:
+    image: grafana/pyroscope:latest
+    container_name: pyroscope
+    restart: on-failure
+    command: [ "-config.file=/etc/pyroscope/config.yaml" ]
+    volumes:
+      - ./docker/mon/pyroscope/config.yaml:/etc/pyroscope/config.yaml
+      - ./data/pyroscope:/var/lib/pyroscope
+    ports:
+      - "4040:4040"
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: alertmanager
+    restart: on-failure
+    command:
+      - --config.file=/etc/alertmanager/config.yaml
+    volumes:
+      - ./docker/mon/alertmanager/config.yaml:/etc/alertmanager/config.yaml:ro
+    ports:
+      - "9093:9093"
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: on-failure
+    volumes:
+      - ./docker/mon/grafana:/etc/grafana/provisioning/datasources
+      - ./data/grafana:/var/lib/grafana
+    ports:
+      - "3000:3000"
+  node-exporter:
+    image: prom/node-exporter:v1.9.0
+    container_name: node-exporter
+    ports:
+      - "9100:9100"

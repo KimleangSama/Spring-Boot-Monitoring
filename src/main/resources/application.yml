@@ -1,0 +1,80 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: "spring-boot-monitoring"
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    properties:
+      format_sql: true
+      show_sql: true
+    open-in-view: false
+  datasource:
+    driver-class-name: ${DRIVER_CLASS_NAME:org.postgresql.Driver}
+    url: ${DATASOURCE_URL:jdbc:postgresql://localhost:5432/demo}
+    username: ${DATASOURCE_USERNAME:postgres}
+    password: ${DATASOURCE_PASSWORD:postgres}
+    hikari:
+      driver-class-name: org.postgresql.Driver
+      username: ${spring.datasource.username}
+      password: ${spring.datasource.password}
+      pool-name: SpringBootHikariCP # HikariCP
+      maximum-pool-size: 20
+      minimum-idle: 2
+      initialization-fail-timeout: 0
+      connection-timeout: 30000
+      schema: public
+
+elastic:
+  apm:
+    enabled: true
+    server-url: http://localhost:8200
+    service-name: elastic-apm-spring-boot-integration
+    secret-token: xxVpmQB2HMzCL9PgBHVrnxjNXXw5J7bd79DFm6sjBJR5HPXDhcF8MSb3vv4bpg44
+    environment: dev
+    application-packages: com.keakimleang.demoelk
+    log-level: ERROR
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: info, health, prometheus, metrics
+  zipkin:
+    tracing:
+      endpoint: "http://localhost:9411/api/v2/spans"
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http:
+          server:
+            requests: true
+  tracing:
+    sampling:
+      probability: 1.0
+    enabled: true
+
+otel:
+  service:
+    name: ${spring.application.name}
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
+
+logging:
+  pattern:
+    correlation: '[${spring.application.name:},%X{traceId:-},%X{spanId:-}] '
+  level:
+    com.keakimleang.demoelk: TRACE
+
+log:
+  loki:
+    url: ${LOKI_URL:http://localhost:3100/loki/api/v1/push}
+  logstash:
+    url: ${LOGSTASH_URL:localhost:5044}
