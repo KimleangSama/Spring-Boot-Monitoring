@@ -202,7 +202,7 @@ services:
     ports:
       - "3000:3000"
   node-exporter:
-    image: prom/node-exporter:v1.9.0
+    image: prom/node-exporter:v1.9.1
     container_name: node-exporter
     ports:
       - "9100:9100"
