@@ -158,13 +158,20 @@ services:
     image: grafana/tempo:latest
     container_name: tempo
     restart: on-failure
-    command: [ "-config.file=/etc/tempo.yaml" ]
+    command: [ "-config.file=/etc/tempo.yaml", "-target=all" ]
     volumes:
       - ./docker/mon/tempo/tempo.yml:/etc/tempo.yaml
       - ./data/tempo:/tmp/tempo
     ports:
       - "9411:9411" # zipkin
       - "4317:4317" # OTLP gRPC
+  tempo-query:
+    image: grafana/tempo-query:latest
+    container_name: tempo-query
+    environment:
+      - TEMPO_SERVER=http://tempo:3200
+    ports:
+      - "16686:16686"
   pyroscope:
     image: grafana/pyroscope:latest
     container_name: pyroscope
