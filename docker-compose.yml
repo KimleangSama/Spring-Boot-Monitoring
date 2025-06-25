@@ -92,7 +92,7 @@ services:
       - elasticsearch
     restart: unless-stopped
   apm-server:
-    image: docker.elastic.co/apm/apm-server:8.15.3
+    image: docker.elastic.co/apm/apm-server:9.0.3
     container_name: apm-server
     ports:
       - "8200:8200"
