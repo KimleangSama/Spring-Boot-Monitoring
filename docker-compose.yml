@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:17.2
+    image: postgres:17.5
     container_name: postgres
     restart: on-failure
     ports:
@@ -33,7 +33,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    image: elastic/elasticsearch:9.0.3
     container_name: elasticsearch
     ports:
       - "9200:9200"
@@ -52,14 +52,14 @@ services:
       http.cors.enabled: true
       http.cors.allow-headers: X-Requested-With,X-Auth-Token,Content-Type,Content-Length,Authorization
       http.cors.allow-credentials: true
-      xpack.security.enabled: false
+      xpack.security.enabled: true
     healthcheck:
-      test: [ 'CMD', 'curl', '-f', 'http://localhost:9200' ]
-      interval: 5s
+      test: [ 'CMD', 'curl', '-f', 'http://localhost:9200', '-u', 'elastic:elastic' ]
+      interval: 10s
       timeout: 5s
       retries: 3
   logstash:
-    image: docker.elastic.co/logstash/logstash:8.15.3
+    image: elastic/logstash:9.0.3
     container_name: logstash
     volumes:
       - ./docker/elk/logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z
@@ -70,11 +70,12 @@ services:
     environment:
       LS_JAVA_OPTS: -Xms256m -Xmx256m
       LOGSTASH_INTERNAL_PASSWORD: logstash
+      ELASTIC_PASSWORD: elastic
     depends_on:
       - elasticsearch
     restart: unless-stopped
   kibana:
-    image: docker.elastic.co/kibana/kibana:8.15.3
+    image: elastic/kibana:9.0.3
     container_name: kibana
     volumes:
       - ./docker/elk/kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z
@@ -85,24 +86,27 @@ services:
       KIBANA_SYSTEM_PASSWORD: kibana
     healthcheck:
       test: [ 'CMD', 'curl', '-f', 'http://localhost:5601' ]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 3
     depends_on:
       - elasticsearch
     restart: unless-stopped
   apm-server:
-    image: docker.elastic.co/apm/apm-server:8.15.3
+    image: elastic/apm-server:9.0.3
     container_name: apm-server
     ports:
       - "8200:8200"
-    environment:
-      - output.elasticsearch.hosts=['http://elasticsearch:9200']
-      - apm-server.host="0.0.0.0:8200"
-      - apm-server.secret_token="xxVpmQB2HMzCL9PgBHVrnxjNXXw5J7bd79DFm6sjBJR5HPXDhcF8MSb3vv4bpg44"
-      - setup.kibana.host="kibana:5601"
-      - setup.template.enabled=true
-      - logging.to_files=false
+    command: >
+      -e
+      -E output.elasticsearch.hosts=["http://elasticsearch:9200"]
+      -E output.elasticsearch.username=elastic
+      -E output.elasticsearch.password=elastic
+      -E apm-server.host=0.0.0.0:8200
+      -E apm-server.secret_token=xxVpmQB2HMzCL9PgBHVrnxjNXXw5J7bd79DFm6sjBJR5HPXDhcF8MSb3vv4bpg44
+      -E setup.kibana.host=kibana:5601
+      -E setup.template.enabled=true
+      -E logging.to_files=false
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -202,7 +206,7 @@ services:
     ports:
       - "3000:3000"
   node-exporter:
-    image: prom/node-exporter:v1.9.0
+    image: prom/node-exporter:v1.9.1
     container_name: node-exporter
     ports:
       - "9100:9100"

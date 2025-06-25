@@ -1,11 +1,14 @@
 package com.keakimleang.demoelk.books;
 
-import com.keakimleang.demoelk.*;
-import lombok.*;
-import lombok.extern.slf4j.*;
-import org.slf4j.*;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.*;
+import kong.unirest.core.HttpResponse;
+import kong.unirest.core.Unirest;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
 
 @Slf4j
 @RestController
@@ -31,7 +34,11 @@ public class BookController {
 
     @GetMapping("/books/external")
     public String getBookByIdExternal() throws InterruptedException {
-        Thread.sleep(1000);
+        HttpResponse<String> response = Unirest.post("https://uat-api-nginx.amkcambodia.com:8065/api/v1/common/oauth/jwt/generate")
+                .header("client_id", "e23e169d-64ea-495b-a04e-9e72bc4cdee4")
+                .multiPartContent()
+                .asString();
+        log.info(response.getBody());
         return rest.getForObject("https://jsonplaceholder.typicode.com/posts", String.class);
     }
 }

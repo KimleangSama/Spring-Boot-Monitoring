@@ -41,7 +41,7 @@ public class ElasticApmConfig {
         apmProps.put(ENVIRONMENT_KEY, environment);
         apmProps.put(APPLICATION_PACKAGES_KEY, applicationPackages);
         apmProps.put(LOG_LEVEL_KEY, logLevel);
-
+        apmProps.put("universal_profiling_integration_enabled", "true");
         ElasticApmAttacher.attach(apmProps);
     }
 }

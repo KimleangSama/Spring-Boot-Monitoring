@@ -37,6 +37,7 @@ elastic:
     environment: dev
     application-packages: com.keakimleang.demoelk
     log-level: ERROR
+    universal_profiling_integration_enabled: true
 
 management:
   endpoints:
