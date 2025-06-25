@@ -53,11 +53,19 @@ services:
       http.cors.allow-headers: X-Requested-With,X-Auth-Token,Content-Type,Content-Length,Authorization
       http.cors.allow-credentials: true
       xpack.security.enabled: true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
     healthcheck:
-      test: [ 'CMD', 'curl', '-f', 'http://localhost:9200', '-u', 'elastic:elastic' ]
+      test:
+        [
+          "CMD-SHELL",
+          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://elasticsearch:9200",
+        ]
       interval: 10s
-      timeout: 5s
-      retries: 3
+      timeout: 10s
+      retries: 30
   logstash:
     image: elastic/logstash:9.0.3
     container_name: logstash
@@ -82,16 +90,39 @@ services:
     ports:
       - "5601:5601"
     environment:
-      ELASTICSEARCH_URL: http://elasticsearch:9200
-      KIBANA_SYSTEM_PASSWORD: kibana
+      - SERVER_NAME=kibana
     healthcheck:
-      test: [ 'CMD', 'curl', '-f', 'http://localhost:5601' ]
+      test:
+        [
+          "CMD-SHELL",
+          "curl -s -I http://kibana:5601 | grep -q 'HTTP/1.1 302 Found'",
+        ]
       interval: 10s
-      timeout: 5s
-      retries: 3
+      timeout: 10s
+      retries: 30
     depends_on:
       - elasticsearch
     restart: unless-stopped
+  kibana_settings:
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    image: elastic/elasticsearch:9.0.3
+    container_name: kibana_settings
+    restart: 'no'
+    command: >
+      bash -c '
+        echo "Setup the kibana_system password";
+        start_time=$$(date +%s);
+        timeout=60;
+        until curl -s -u "elastic:elastic" -X POST http://elasticsearch:9200/_security/user/kibana_system/_password -d "{\"password\":\"kibana\"}" -H "Content-Type: application/json" | grep -q "^{}"; do
+          if [ $$(($$(date +%s) - $$start_time)) -ge $$timeout ]; then
+            echo "Error: Elasticsearch timeout";
+            exit 1;
+          fi;
+          sleep 2;
+        done;
+      '
   apm-server:
     image: elastic/apm-server:9.0.3
     container_name: apm-server
