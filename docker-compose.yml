@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:17.2
+    image: postgres:17.5
     container_name: postgres
     restart: on-failure
     ports:
