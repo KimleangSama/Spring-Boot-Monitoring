@@ -1,6 +1,9 @@
-# Spring Boot Monitoring
+# Spring Boot Monitoring with Tools
 
 Up the Docker Compose
+```shell
+docker compose up -d
+```
 
 ```shell
 curl -X POST -u elastic:elastic \
